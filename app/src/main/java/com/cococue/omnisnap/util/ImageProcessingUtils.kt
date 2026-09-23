@@ -7,12 +7,16 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.location.Geocoder
+import android.net.Uri
+import android.os.Build
+import android.util.Log
 import com.cococue.omnisnap.ads.AdManager
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -38,63 +42,116 @@ enum class ScanFilter {
 object ImageProcessingUtils {
 
     /**
-     * Apply image filter to bitmap
+     * Apply image filter to bitmap (CamScanner Magic Color, Grayscale, High-Contrast Black&White)
      */
     suspend fun applyFilter(src: Bitmap, filter: ScanFilter): Bitmap = withContext(Dispatchers.Default) {
-        if (filter == ScanFilter.ORIGINAL) return@withContext src
-
-        val width = src.width
-        val height = src.height
-        val dest = Bitmap.createBitmap(width, height, src.config ?: Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(dest)
-        val paint = Paint()
-
-        val cm = ColorMatrix()
         when (filter) {
-            ScanFilter.GRAYSCALE -> {
-                cm.setSaturation(0f)
-            }
-            ScanFilter.BLACK_WHITE -> {
-                cm.set(floatArrayOf(
-                    1.5f, 1.5f, 1.5f, 0f, -200f,
-                    1.5f, 1.5f, 1.5f, 0f, -200f,
-                    1.5f, 1.5f, 1.5f, 0f, -200f,
-                    0f, 0f, 0f, 1f, 0f
-                ))
-            }
-            ScanFilter.MAGIC_ENHANCE -> {
-                cm.set(floatArrayOf(
-                    1.2f, 0f, 0f, 0f, 10f,
-                    0f, 1.25f, 0f, 0f, 10f,
-                    0f, 0f, 1.2f, 0f, 10f,
-                    0f, 0f, 0f, 1f, 0f
-                ))
-            }
-            ScanFilter.HIGH_CONTRAST -> {
-                val contrast = 1.4f
-                val translate = (-0.5f * contrast + 0.5f) * 255f
-                cm.set(floatArrayOf(
-                    contrast, 0f, 0f, 0f, translate,
-                    0f, contrast, 0f, 0f, translate,
-                    0f, contrast, 0f, 0f, translate,
-                    0f, 0f, 0f, 1f, 0f
-                ))
-            }
-            ScanFilter.ORIGINAL -> {}
+            ScanFilter.ORIGINAL -> src
+            ScanFilter.MAGIC_ENHANCE -> applyCamScannerMagicFilter(src)
+            ScanFilter.BLACK_WHITE -> applyBlackAndWhiteFilter(src)
+            ScanFilter.GRAYSCALE -> applyGrayscaleFilter(src)
+            ScanFilter.HIGH_CONTRAST -> applyHighContrastFilter(src)
         }
-
-        paint.colorFilter = ColorMatrixColorFilter(cm)
-        canvas.drawBitmap(src, 0f, 0f, paint)
-        return@withContext dest
     }
 
     /**
-     * Rotate bitmap
+     * CamScanner "Magic Color" Filter: Removes paper shadows, flattens background to pure white,
+     * sharpens text and table lines while keeping colored stamps/signatures vibrant.
      */
+    private fun applyCamScannerMagicFilter(src: Bitmap): Bitmap {
+        val width = src.width
+        val height = src.height
+        val pixels = IntArray(width * height)
+        src.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        for (i in pixels.indices) {
+            val color = pixels[i]
+            val r = (color shr 16) and 0xFF
+            val g = (color shr 8) and 0xFF
+            val b = color and 0xFF
+
+            // Calculate luminance
+            val lum = 0.299f * r + 0.587f * g + 0.114f * b
+
+            // CamScanner Whitening & Contrast Stretch
+            val factor = when {
+                lum > 155f -> {
+                    // Paper background -> Whiten to pure white 255
+                    1.9f
+                }
+                lum < 105f -> {
+                    // Dark ink & table lines -> Deepen dark lines
+                    0.65f
+                }
+                else -> {
+                    // Smooth transition S-Curve
+                    val norm = (lum - 105f) / 50f
+                    0.65f + norm * 1.25f
+                }
+            }
+
+            val newR = (r * factor).toInt().coerceIn(0, 255)
+            val newG = (g * factor).toInt().coerceIn(0, 255)
+            val newB = (b * factor).toInt().coerceIn(0, 255)
+
+            pixels[i] = (0xFF shl 24) or (newR shl 16) or (newG shl 8) or newB
+        }
+
+        val dest = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        dest.setPixels(pixels, 0, width, 0, 0, width, height)
+        return dest
+    }
+
+    private fun applyGrayscaleFilter(src: Bitmap): Bitmap {
+        val bmp = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val cm = ColorMatrix()
+        cm.setSaturation(0f)
+        paint.colorFilter = ColorMatrixColorFilter(cm)
+        canvas.drawBitmap(src, 0f, 0f, paint)
+        return bmp
+    }
+
+    private fun applyBlackAndWhiteFilter(src: Bitmap): Bitmap {
+        val bmp = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val cm = ColorMatrix(
+            floatArrayOf(
+                1.5f, 0f, 0f, 0f, -60f,
+                0f, 1.5f, 0f, 0f, -60f,
+                0f, 0f, 1.5f, 0f, -60f,
+                0f, 0f, 0f, 1f, 0f
+            )
+        )
+        cm.setSaturation(0f)
+        paint.colorFilter = ColorMatrixColorFilter(cm)
+        canvas.drawBitmap(src, 0f, 0f, paint)
+        return bmp
+    }
+
+    private fun applyHighContrastFilter(src: Bitmap): Bitmap {
+        val bmp = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val cm = ColorMatrix(
+            floatArrayOf(
+                2.0f, 0f, 0f, 0f, -100f,
+                0f, 2.0f, 0f, 0f, -100f,
+                0f, 0f, 2.0f, 0f, -100f,
+                0f, 0f, 0f, 1f, 0f
+            )
+        )
+        paint.colorFilter = ColorMatrixColorFilter(cm)
+        canvas.drawBitmap(src, 0f, 0f, paint)
+        return bmp
+    }
+
     suspend fun rotateBitmap(src: Bitmap, degrees: Float): Bitmap = withContext(Dispatchers.Default) {
-        if (degrees % 360 == 0f) return@withContext src
+        if (degrees == 0f) return@withContext src
         val matrix = Matrix().apply { postRotate(degrees) }
-        return@withContext Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+        Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
     }
 
     /**
@@ -141,16 +198,7 @@ object ImageProcessingUtils {
 
         if (targetLat == 0.0 && targetLon == 0.0) return@withContext null
 
-        val apiKey = AdManager.config.googleMapsApiKey.trim()
-
-        val mapUrls = mutableListOf<String>()
-
-        // 1. Official Google Maps Static API if API key is provided
-        if (apiKey.isNotBlank()) {
-            mapUrls.add("https://maps.googleapis.com/maps/api/staticmap?center=$targetLat,$targetLon&zoom=16&size=650x420&scale=2&maptype=roadmap&markers=color:red%7C$targetLat,$targetLon&key=$apiKey")
-        }
-
-        // 2. High-res tile URLs with full street names & local POI labels
+        // 1. Tile calculation for zoom 16
         val zoom = 16
         val n = 1 shl zoom
         val floatTileX = (targetLon + 180.0) / 360.0 * n
@@ -160,59 +208,78 @@ object ImageProcessingUtils {
         val centerTileX = Math.floor(floatTileX).toInt()
         val centerTileY = Math.floor(floatTileY).toInt()
 
-        // 3. Try 3x3 Carto Voyager Tile Stitching (Includes full street labels & POIs)
-        try {
-            val stitched = Bitmap.createBitmap(768, 768, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(stitched)
-            var loadedCount = 0
+        // Helper function for 3x3 tile stitching
+        fun tryStitchTiles(getTileUrl: (tx: Int, ty: Int) -> String): Bitmap? {
+            return try {
+                val stitched = Bitmap.createBitmap(768, 768, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(stitched)
+                var loadedCount = 0
 
-            for (dx in -1..1) {
-                for (dy in -1..1) {
-                    val tx = centerTileX + dx
-                    val ty = centerTileY + dy
-                    val tileUrl = "https://cartodb-basemaps-a.global.ssl.fastly.net/rastertiles/voyager/$zoom/$tx/$ty.png"
-                    val connection = URL(tileUrl).openConnection() as HttpURLConnection
-                    connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OmniSnap/1.0")
-                    connection.connectTimeout = 2500
-                    connection.readTimeout = 2500
-                    if (connection.responseCode == 200) {
-                        connection.inputStream.use { input ->
-                            val tileBmp = BitmapFactory.decodeStream(input)
-                            if (tileBmp != null) {
-                                canvas.drawBitmap(tileBmp, (dx + 1) * 256f, (dy + 1) * 256f, null)
-                                loadedCount++
+                for (dx in -1..1) {
+                    for (dy in -1..1) {
+                        val tx = centerTileX + dx
+                        val ty = centerTileY + dy
+                        val tileUrl = getTileUrl(tx, ty)
+                        val connection = URL(tileUrl).openConnection() as HttpURLConnection
+                        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile) OmniSnap/1.0 (com.cococue.omnisnap)")
+                        connection.connectTimeout = 2500
+                        connection.readTimeout = 2500
+                        if (connection.responseCode == 200) {
+                            connection.inputStream.use { input ->
+                                val tileBmp = BitmapFactory.decodeStream(input)
+                                if (tileBmp != null) {
+                                    canvas.drawBitmap(tileBmp, (dx + 1) * 256f, (dy + 1) * 256f, null)
+                                    loadedCount++
+                                }
                             }
                         }
                     }
                 }
+
+                if (loadedCount >= 4) {
+                    val pixelOffsetX = ((floatTileX - centerTileX) * 256.0).toInt()
+                    val pixelOffsetY = ((floatTileY - centerTileY) * 256.0).toInt()
+
+                    val userCenterX = 256 + pixelOffsetX
+                    val userCenterY = 256 + pixelOffsetY
+
+                    val cropW = 600
+                    val cropH = 380
+
+                    val cropLeft = (userCenterX - cropW / 2).coerceIn(0, 768 - cropW)
+                    val cropTop = (userCenterY - cropH / 2).coerceIn(0, 768 - cropH)
+
+                    Bitmap.createBitmap(stitched, cropLeft, cropTop, cropW, cropH)
+                } else null
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
             }
-
-            if (loadedCount >= 4) {
-                val pixelOffsetX = ((floatTileX - centerTileX) * 256.0).toInt()
-                val pixelOffsetY = ((floatTileY - centerTileY) * 256.0).toInt()
-
-                val userCenterX = 256 + pixelOffsetX
-                val userCenterY = 256 + pixelOffsetY
-
-                val cropW = 600
-                val cropH = 380
-
-                val cropLeft = (userCenterX - cropW / 2).coerceIn(0, 768 - cropW)
-                val cropTop = (userCenterY - cropH / 2).coerceIn(0, 768 - cropH)
-
-                return@withContext Bitmap.createBitmap(stitched, cropLeft, cropTop, cropW, cropH)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
 
-        // Add fallback static map endpoints
-        mapUrls.add("https://static-maps.yandex.ru/1.x/?ll=$targetLon,$targetLat&z=16&l=map&lang=id_ID&size=650,420&pt=$targetLon,$targetLat,pm2rdm")
+        // 2. OpenStreetMap (OSM) standard tiles (Free, public, no watermark, full POI/street names)
+        val osmSubdomains = listOf("a", "b", "c")
+        val osmBmp = tryStitchTiles { tx, ty ->
+            val sub = osmSubdomains[Math.floorMod(tx + ty, 3)]
+            "https://$sub.tile.openstreetmap.org/$zoom/$tx/$ty.png"
+        }
+        if (osmBmp != null) return@withContext osmBmp
 
-        for (urlStr in mapUrls) {
+        // 3. Esri World Street Map tiles as secondary tile source
+        val esriBmp = tryStitchTiles { tx, ty ->
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/$zoom/$ty/$tx"
+        }
+        if (esriBmp != null) return@withContext esriBmp
+
+        // 4. Fallback static map endpoints (Yandex Maps)
+        val fallbackUrls = listOf(
+            "https://static-maps.yandex.ru/1.x/?ll=$targetLon,$targetLat&z=16&l=map&lang=id_ID&size=650,420&pt=$targetLon,$targetLat,pm2rdm"
+        )
+
+        for (urlStr in fallbackUrls) {
             try {
                 val connection = URL(urlStr).openConnection() as HttpURLConnection
-                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OmniSnap/1.0")
+                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile) OmniSnap/1.0")
                 connection.connectTimeout = 3000
                 connection.readTimeout = 3000
                 connection.connect()
@@ -258,23 +325,43 @@ object ImageProcessingUtils {
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = baseFontSize
-            setShadowLayer(4f, 2f, 2f, Color.argb(180, 0, 0, 0))
+            isFakeBoldText = true
         }
 
-        // Process wrapped text lines
-        val wrappedLines = mutableListOf<String>()
-        wrappedLines.addAll(wrapText("⏰ $dateStr", textPaint, boxWidth - padding * 2))
-        if (cleanLocation.isNotBlank()) {
-            wrappedLines.addAll(wrapText("📍 $cleanLocation", textPaint, boxWidth - padding * 2))
+        val lines = mutableListOf<String>()
+        lines.add("⏰ $dateStr")
+
+        val coordsText = if (latitude != 0.0 || longitude != 0.0) {
+            String.format(Locale.US, "Lat: %.5f, Lon: %.5f", latitude, longitude)
+        } else ""
+
+        val fullLocStr = when {
+            coordsText.isNotBlank() && cleanLocation.isNotBlank() && !cleanLocation.contains("Lat:") -> {
+                "📍 $coordsText\n$cleanLocation"
+            }
+            coordsText.isNotBlank() && cleanLocation.isBlank() -> {
+                "📍 $coordsText"
+            }
+            cleanLocation.isNotBlank() -> {
+                if (cleanLocation.startsWith("📍")) cleanLocation else "📍 $cleanLocation"
+            }
+            else -> ""
         }
+
+        if (fullLocStr.isNotBlank()) {
+            for (subLine in fullLocStr.split("\n")) {
+                val locationLines = wrapText(subLine, textPaint, boxWidth - padding * 2)
+                lines.addAll(locationLines)
+            }
+        }
+
         if (customNote.isNotBlank()) {
-            wrappedLines.addAll(wrapText("📝 $customNote", textPaint, boxWidth - padding * 2))
+            lines.add("📝 $customNote")
         }
 
         val lineSpacing = baseFontSize * 0.35f
-        val totalTextHeight = wrappedLines.size * baseFontSize + (wrappedLines.size - 1) * lineSpacing + padding * 2
+        val totalTextHeight = lines.size * baseFontSize + (lines.size - 1) * lineSpacing
 
-        // Large Map Graphic size spanning card width
         val mapBoxWidth = boxWidth - padding * 2
         val mapBoxHeight = (mapBoxWidth * 0.58f).coerceIn(220f, 500f)
 
@@ -294,7 +381,7 @@ object ImageProcessingUtils {
 
         // Draw Text Lines
         var currentY = boxTop + padding + baseFontSize * 0.8f
-        for (line in wrappedLines) {
+        for (line in lines) {
             canvas.drawText(line, boxLeft + padding, currentY, textPaint)
             currentY += baseFontSize + lineSpacing
         }
@@ -322,7 +409,7 @@ object ImageProcessingUtils {
                 val mapImagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
                 canvas.drawBitmap(realMapBmp, srcRect, dstRect, mapImagePaint)
 
-                // Draw Google Maps Blue Location Pulse Pin at Center
+                // Draw Location Pulse Pin at Center
                 val pinX = mapLeft + mapBoxWidth * 0.5f
                 val pinY = mapTop + mapBoxHeight * 0.5f
 
@@ -344,92 +431,80 @@ object ImageProcessingUtils {
                 canvas.drawCircle(pinX, pinY, dotRadius * 1.4f, whiteHaloPaint)
                 canvas.drawCircle(pinX, pinY, dotRadius, blueDotPaint)
 
-                // Google Maps Badge
+                // Maps Badge
                 val googleBadgeBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = Color.argb(220, 255, 255, 255)
                     style = Paint.Style.FILL
                 }
-                canvas.drawRoundRect(
-                    RectF(
-                        mapLeft + mapBoxWidth * 0.03f,
-                        mapBottom - mapBoxHeight * 0.22f,
-                        mapLeft + mapBoxWidth * 0.38f,
-                        mapBottom - mapBoxHeight * 0.04f
-                    ),
-                    8f, 8f, googleBadgeBg
-                )
-
-                val googleTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = Color.rgb(66, 133, 244)
-                    textSize = mapBoxHeight * 0.13f
+                    textSize = (mapBoxHeight * 0.085f).coerceAtLeast(18f)
                     isFakeBoldText = true
                 }
-                canvas.drawText("Google", mapLeft + mapBoxWidth * 0.06f, mapBottom - mapBoxHeight * 0.08f, googleTextPaint)
+
+                val badgeText = "OpenStreetMap"
+                val badgeTextWidth = badgeTextPaint.measureText(badgeText)
+                val badgePaddingH = 14f
+                val badgePaddingV = 8f
+                val badgeWidth = badgeTextWidth + badgePaddingH * 2
+                val badgeHeight = badgeTextPaint.textSize + badgePaddingV * 2
+
+                val badgeLeft = mapLeft + 12f
+                val badgeBottom = mapBottom - 12f
+                val badgeTop = badgeBottom - badgeHeight
+                val badgeRight = badgeLeft + badgeWidth
+
+                canvas.drawRoundRect(RectF(badgeLeft, badgeTop, badgeRight, badgeBottom), 8f, 8f, googleBadgeBg)
+                canvas.drawText(badgeText, badgeLeft + badgePaddingH, badgeBottom - badgePaddingV - 2f, badgeTextPaint)
 
                 canvas.restore()
-            } else {
-                // Minimal Clean Vector Map Fallback without fake text/labels when network tile unavailable
-                val mapLandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.rgb(241, 243, 244)
-                    style = Paint.Style.FILL
-                }
-                canvas.drawRoundRect(RectF(mapLeft, mapTop, mapRight, mapBottom), 14f, 14f, mapLandPaint)
-
-                val parkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.rgb(206, 234, 214)
-                    style = Paint.Style.FILL
-                }
-                val parkPath = Path().apply {
-                    moveTo(mapLeft + mapBoxWidth * 0.1f, mapTop + mapBoxHeight * 0.1f)
-                    lineTo(mapLeft + mapBoxWidth * 0.45f, mapTop + mapBoxHeight * 0.05f)
-                    lineTo(mapLeft + mapBoxWidth * 0.35f, mapTop + mapBoxHeight * 0.5f)
-                    close()
-                }
-                canvas.drawPath(parkPath, parkPaint)
-
-                val roadYellow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.rgb(254, 217, 155)
-                    strokeWidth = mapBoxHeight * 0.12f
-                    style = Paint.Style.STROKE
-                }
-                canvas.drawLine(mapLeft + mapBoxWidth * 0.15f, mapTop, mapLeft + mapBoxWidth * 0.85f, mapBottom, roadYellow)
-
-                val pinX = mapLeft + mapBoxWidth * 0.5f
-                val pinY = mapTop + mapBoxHeight * 0.45f
-                val pinRadius = mapBoxHeight * 0.18f
-
-                val redPinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.rgb(234, 67, 53)
-                    style = Paint.Style.FILL
-                }
-                canvas.drawCircle(pinX, pinY, pinRadius, redPinPaint)
-
-                val innerPin = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.WHITE
-                    style = Paint.Style.FILL
-                }
-                canvas.drawCircle(pinX, pinY, pinRadius * 0.45f, innerPin)
             }
         }
 
-        return@withContext mutableBitmap
+        mutableBitmap
     }
 
     /**
-     * Extract text using ML Kit OCR
+     * Recognized text extraction from Bitmap using ML Kit OCR
      */
-    suspend fun extractTextFromBitmap(bitmap: Bitmap): String = withContext(Dispatchers.Default) {
-        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        val inputImage = InputImage.fromBitmap(bitmap, 0)
+    suspend fun recognizeText(bitmap: Bitmap): String = suspendCancellableCoroutine { continuation ->
+        try {
+            val image = InputImage.fromBitmap(bitmap, 0)
+            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-        return@withContext suspendCancellableCoroutine { continuation ->
-            recognizer.process(inputImage)
+            recognizer.process(image)
                 .addOnSuccessListener { visionText ->
                     continuation.resume(visionText.text)
                 }
-                .addOnFailureListener {
-                    continuation.resume("Failed to recognize text: ${it.localizedMessage}")
+                .addOnFailureListener { e ->
+                    continuation.resume("OCR failed: ${e.message}")
                 }
+        } catch (e: Exception) {
+            continuation.resume("Error processing image for OCR")
         }
     }
+
+    suspend fun extractTextFromBitmap(bitmap: Bitmap): String = recognizeText(bitmap)
+
+    /**
+     * Decode Bitmap from Uri
+     */
+    fun getBitmapFromUri(context: Context, uri: Uri): Bitmap? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val source = ImageDecoder.createSource(context.contentResolver, uri)
+                ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                    decoder.isMutableRequired = true
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    fun decodeBitmapFromUri(context: Context, uri: Uri): Bitmap? = getBitmapFromUri(context, uri)
 }

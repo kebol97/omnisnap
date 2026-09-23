@@ -137,6 +137,8 @@ fun TimestampPreviewScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            AdBannerView()
+
             // Preview Image Container
             Box(
                 modifier = Modifier
@@ -302,8 +304,6 @@ fun TimestampPreviewScreen(
                     Text("Share")
                 }
             }
-
-            AdBannerView()
         }
     }
 }

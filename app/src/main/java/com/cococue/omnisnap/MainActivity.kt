@@ -2,12 +2,16 @@ package com.cococue.omnisnap
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
@@ -18,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.cococue.omnisnap.ads.AdManager
 import com.cococue.omnisnap.ui.components.BottomNavBar
+import com.cococue.omnisnap.ui.components.ExitConfirmationDialog
 import com.cococue.omnisnap.ui.components.Screen
 import com.cococue.omnisnap.ui.screens.DocumentScannerScreen
 import com.cococue.omnisnap.ui.screens.HomeScreen
@@ -26,10 +31,14 @@ import com.cococue.omnisnap.ui.screens.PdfSignatureScreen
 import com.cococue.omnisnap.ui.screens.PdfToolsScreen
 import com.cococue.omnisnap.ui.screens.PhotoConverterScreen
 import com.cococue.omnisnap.ui.screens.SettingsScreen
+import com.cococue.omnisnap.ui.screens.SplashScreen
 import com.cococue.omnisnap.ui.screens.TimestampCameraScreen
 import com.cococue.omnisnap.ui.screens.TimestampPreviewScreen
+import com.cococue.omnisnap.ui.screens.TimestampVideoPreviewScreen
 import com.cococue.omnisnap.ui.theme.OmniSnapTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -39,12 +48,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // Fetch Remote Config from GitHub and setup UMP consent & Interstitial preloading
-        lifecycleScope.launch {
-            AdManager.fetchRemoteConfig()
-            AdManager.requestConsent(this@MainActivity) {
-                AdManager.loadInterstitialAd(this@MainActivity)
-                AdManager.loadRewardedAd(this@MainActivity)
+        // Non-blocking parallel pre-warming of Remote Config & AdMob consent/ads
+        lifecycleScope.launch(Dispatchers.IO) {
+            AdManager.init(this@MainActivity)
+            AdManager.fetchRemoteConfig(this@MainActivity)
+            withContext(Dispatchers.Main) {
+                AdManager.requestConsent(this@MainActivity) {
+                    AdManager.preloadStartupAds(this@MainActivity)
+                }
             }
         }
 
@@ -62,6 +73,29 @@ fun OmniSnapMainApp() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    var showExitDialog by remember { mutableStateOf(false) }
+
+    val mainTabRoutes = listOf(
+        Screen.Home.route,
+        Screen.Scanner.route,
+        Screen.TimestampCamera.route,
+        Screen.Files.route,
+        Screen.Settings.route
+    )
+
+    // Handle back button on Home Screen to show Exit Confirmation Dialog
+    if (currentRoute == Screen.Home.route) {
+        BackHandler {
+            showExitDialog = true
+        }
+    }
+
+    if (showExitDialog) {
+        ExitConfirmationDialog(
+            onDismiss = { showExitDialog = false }
+        )
+    }
+
     val navigateToFilesAndClearStack = {
         navController.navigate(Screen.Files.route) {
             popUpTo(Screen.Home.route) {
@@ -73,13 +107,6 @@ fun OmniSnapMainApp() {
 
     Scaffold(
         bottomBar = {
-            val mainTabRoutes = listOf(
-                Screen.Home.route,
-                Screen.Scanner.route,
-                Screen.TimestampCamera.route,
-                Screen.Files.route,
-                Screen.Settings.route
-            )
             if (currentRoute in mainTabRoutes) {
                 BottomNavBar(
                     currentRoute = currentRoute,
@@ -100,9 +127,21 @@ fun OmniSnapMainApp() {
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Home.route,
+            startDestination = "splash",
             modifier = Modifier.padding(paddingValues)
         ) {
+            composable("splash") {
+                SplashScreen(
+                    onSplashFinished = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo("splash") {
+                                inclusive = true
+                            }
+                        }
+                    }
+                )
+            }
+
             composable(Screen.Home.route) {
                 HomeScreen(
                     onNavigateToScan = { navController.navigate(Screen.Scanner.route) },
@@ -121,13 +160,21 @@ fun OmniSnapMainApp() {
 
             composable(Screen.TimestampCamera.route) {
                 TimestampCameraScreen(
-                    onCaptured = { imagePath, note, locationAddress, lat, lon ->
+                    onCapturedPhoto = { imagePath, note, locationAddress, lat, lon ->
                         val encodedPath = URLEncoder.encode(imagePath, StandardCharsets.UTF_8.toString())
                         val encodedNote = URLEncoder.encode(note, StandardCharsets.UTF_8.toString())
                         val encodedLoc = URLEncoder.encode(locationAddress, StandardCharsets.UTF_8.toString())
                         val floatLat = lat.toFloat()
                         val floatLon = lon.toFloat()
                         navController.navigate("timestamp_preview?path=$encodedPath&note=$encodedNote&loc=$encodedLoc&lat=$floatLat&lon=$floatLon")
+                    },
+                    onCapturedVideo = { videoPath, note, locationAddress, lat, lon ->
+                        val encodedPath = URLEncoder.encode(videoPath, StandardCharsets.UTF_8.toString())
+                        val encodedNote = URLEncoder.encode(note, StandardCharsets.UTF_8.toString())
+                        val encodedLoc = URLEncoder.encode(locationAddress, StandardCharsets.UTF_8.toString())
+                        val floatLat = lat.toFloat()
+                        val floatLon = lon.toFloat()
+                        navController.navigate("timestamp_video_preview?path=$encodedPath&note=$encodedNote&loc=$encodedLoc&lat=$floatLat&lon=$floatLon")
                     }
                 )
             }
@@ -149,6 +196,32 @@ fun OmniSnapMainApp() {
                 val lon = backStackEntry.arguments?.getFloat("lon")?.toDouble() ?: 0.0
                 TimestampPreviewScreen(
                     imagePath = path,
+                    initialNote = note,
+                    locationAddress = loc,
+                    latitude = lat,
+                    longitude = lon,
+                    onBack = { navController.popBackStack() },
+                    onDone = { navigateToFilesAndClearStack() }
+                )
+            }
+
+            composable(
+                route = "timestamp_video_preview?path={path}&note={note}&loc={loc}&lat={lat}&lon={lon}",
+                arguments = listOf(
+                    navArgument("path") { type = NavType.StringType },
+                    navArgument("note") { type = NavType.StringType },
+                    navArgument("loc") { type = NavType.StringType },
+                    navArgument("lat") { type = NavType.FloatType; defaultValue = 0f },
+                    navArgument("lon") { type = NavType.FloatType; defaultValue = 0f }
+                )
+            ) { backStackEntry ->
+                val path = backStackEntry.arguments?.getString("path") ?: ""
+                val note = backStackEntry.arguments?.getString("note") ?: ""
+                val loc = backStackEntry.arguments?.getString("loc") ?: ""
+                val lat = backStackEntry.arguments?.getFloat("lat")?.toDouble() ?: 0.0
+                val lon = backStackEntry.arguments?.getFloat("lon")?.toDouble() ?: 0.0
+                TimestampVideoPreviewScreen(
+                    videoPath = path,
                     initialNote = note,
                     locationAddress = loc,
                     latitude = lat,

@@ -28,13 +28,18 @@ class DocumentRepository(private val context: Context) {
 
     suspend fun getAllDocuments(): List<DocumentItem> = withContext(Dispatchers.IO) {
         val files = appDir.listFiles() ?: emptyArray()
+        val validExtensions = listOf("pdf", "jpg", "jpeg", "png", "webp", "mp4", "mkv", "3gp")
         return@withContext files
-            .filter { it.isFile && (it.extension.lowercase() in listOf("pdf", "jpg", "jpeg", "png", "webp")) }
+            .filter { it.isFile && (it.extension.lowercase() in validExtensions) }
             .map { file ->
+                val ext = file.extension.lowercase()
                 val type = when {
+                    ext in listOf("mp4", "mkv", "3gp") -> {
+                        if (file.name.contains("Timestamp", ignoreCase = true)) DocumentType.TIMESTAMP_VIDEO else DocumentType.VIDEO
+                    }
                     file.name.contains("Timestamp", ignoreCase = true) -> DocumentType.TIMESTAMP_PHOTO
                     file.name.contains("Scan", ignoreCase = true) -> DocumentType.SCAN
-                    file.extension.equals("pdf", ignoreCase = true) -> DocumentType.PDF
+                    ext == "pdf" -> DocumentType.PDF
                     else -> DocumentType.IMAGE
                 }
                 DocumentItem(
@@ -71,6 +76,20 @@ class DocumentRepository(private val context: Context) {
         return@withContext destFile
     }
 
+    suspend fun saveVideoFile(
+        sourceFile: File,
+        prefix: String = "Timestamp_Video"
+    ): File = withContext(Dispatchers.IO) {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val fileName = "${prefix}_${timeStamp}.mp4"
+        val destFile = File(appDir, fileName)
+
+        if (sourceFile.exists()) {
+            sourceFile.copyTo(destFile, overwrite = true)
+        }
+        return@withContext destFile
+    }
+
     suspend fun deleteDocument(item: DocumentItem): Boolean = withContext(Dispatchers.IO) {
         if (item.file.exists()) {
             item.file.delete()
@@ -102,7 +121,11 @@ class DocumentRepository(private val context: Context) {
     fun shareDocument(item: DocumentItem) {
         val authority = "${context.packageName}.fileprovider"
         val uri: Uri = FileProvider.getUriForFile(context, authority, item.file)
-        val mimeType = if (item.isPdf) "application/pdf" else "image/*"
+        val mimeType = when {
+            item.isPdf -> "application/pdf"
+            item.isVideo -> "video/*"
+            else -> "image/*"
+        }
 
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = mimeType

@@ -2,10 +2,7 @@ package com.cococue.omnisnap.ui.screens
 
 import android.app.Activity
 import android.graphics.Bitmap
-import android.graphics.ImageDecoder
 import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -34,7 +31,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.RotateRight
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,7 +40,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -89,9 +85,12 @@ fun DocumentScannerScreen(
     val repository = remember { DocumentRepository(context) }
     val scope = rememberCoroutineScope()
 
+    var rawOriginalBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var croppedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var quadCornersState by remember { mutableStateOf<QuadCorners?>(null) }
-    var currentFilter by remember { mutableStateOf(ScanFilter.ORIGINAL) }
+    var currentFilter by remember { mutableStateOf(ScanFilter.MAGIC_ENHANCE) }
+    var isCropped by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
 
     // ML Kit Native Document Scanner Launcher
@@ -110,7 +109,7 @@ fun DocumentScannerScreen(
                         FileOutputStream(targetFile).use { out ->
                             inputStream?.copyTo(out)
                         }
-                        Toast.makeText(context, "Document PDF Saved Successfully!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Dokumen PDF Berhasil Disimpan!", Toast.LENGTH_SHORT).show()
                         if (activity != null) {
                             AdManager.showInterstitialAd(activity) {
                                 onScanSuccess()
@@ -136,15 +135,19 @@ fun DocumentScannerScreen(
             scope.launch {
                 isProcessing = true
                 try {
-                    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, it))
+                    val bitmap = ImageProcessingUtils.decodeBitmapFromUri(context, it)
+                    if (bitmap != null) {
+                        rawOriginalBitmap = bitmap
+                        selectedBitmap = bitmap
+                        croppedBitmap = null
+                        isCropped = false
+                        quadCornersState = QuadCorners()
+                        currentFilter = ScanFilter.MAGIC_ENHANCE
                     } else {
-                        @Suppress("DEPRECATION")
-                        MediaStore.Images.Media.getBitmap(context.contentResolver, it)
+                        Toast.makeText(context, "Gagal memuat gambar", Toast.LENGTH_SHORT).show()
                     }
-                    selectedBitmap = bitmap
                 } catch (e: Exception) {
-                    Toast.makeText(context, "Failed to load image", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Gagal memuat gambar", Toast.LENGTH_SHORT).show()
                 } finally {
                     isProcessing = false
                 }
@@ -192,6 +195,8 @@ fun DocumentScannerScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            AdBannerView()
+
             // Document Scanner Mode Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -252,7 +257,7 @@ fun DocumentScannerScreen(
             }
 
             // Custom CamScanner Crop Studio Canvas
-            selectedBitmap?.let { rawBitmap ->
+            rawOriginalBitmap?.let { rawBitmap ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -263,29 +268,29 @@ fun DocumentScannerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "CamScanner 4-Point Quad Crop & Enhance",
+                            text = if (isCropped) "Hasil Scan Pro (CamScanner Quality)" else "CamScanner 4-Point Precision Crop",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Drag the 4 corner handles to align document boundaries perfectly",
+                            text = if (isCropped) "Dokumen telah diluruskan & diperjelas seperti CamScanner" else "Geser 4 titik sudut untuk menyesuaikan batas dokumen secara presisi",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Interactive Crop View Box
+                        // Interactive Crop View or Cropped Preview
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(300.dp)
+                                .height(380.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             if (isProcessing) {
                                 CircularProgressIndicator()
-                            } else {
+                            } else if (!isCropped) {
                                 DocumentCropView(
                                     bitmap = rawBitmap,
                                     modifier = Modifier.fillMaxSize(),
@@ -293,94 +298,128 @@ fun DocumentScannerScreen(
                                         quadCornersState = corners
                                     }
                                 )
+                            } else {
+                                selectedBitmap?.let { displayBmp ->
+                                    Image(
+                                        bitmap = displayBmp.asImageBitmap(),
+                                        contentDescription = "Cropped Scan Result",
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Filter Selectors
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(ScanFilter.values()) { filter ->
-                                FilterChip(
-                                    selected = currentFilter == filter,
-                                    onClick = {
-                                        currentFilter = filter
-                                        scope.launch {
-                                            isProcessing = true
-                                            selectedBitmap = ImageProcessingUtils.applyFilter(rawBitmap, filter)
-                                            isProcessing = false
-                                        }
-                                    },
-                                    label = { Text(filter.name.replace("_", " ")) },
-                                    leadingIcon = if (currentFilter == filter) {
-                                        { Icon(Icons.Default.Check, contentDescription = null) }
-                                    } else null
-                                )
-                            }
-                        }
+                        // Filter Selectors (Visible when cropped)
+                        if (isCropped) {
+                            Text(
+                                text = "Filter Efek Dokumen:",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.Start)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(ScanFilter.entries) { filter ->
+                                    FilterChip(
+                                        selected = currentFilter == filter,
+                                        onClick = {
+                                            currentFilter = filter
+                                            scope.launch {
+                                                val baseBmp = croppedBitmap ?: rawBitmap
+                                                isProcessing = true
+                                                selectedBitmap = ImageProcessingUtils.applyFilter(baseBmp, filter)
+                                                isProcessing = false
+                                            }
+                                        },
+                                        label = { Text(filter.name.replace("_", " ")) },
+                                        leadingIcon = if (currentFilter == filter) {
+                                            { Icon(Icons.Default.Check, contentDescription = null) }
+                                        } else null
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Button(
-                                onClick = {
-                                    scope.launch {
-                                        val corners = quadCornersState
-                                        if (corners != null) {
+                            if (!isCropped) {
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            val corners = quadCornersState ?: QuadCorners()
                                             isProcessing = true
-                                            selectedBitmap = PerspectiveTransformUtils.cropPerspective(rawBitmap, corners)
+                                            val cropped = PerspectiveTransformUtils.cropPerspective(rawBitmap, corners)
+                                            croppedBitmap = cropped
+                                            selectedBitmap = ImageProcessingUtils.applyFilter(cropped, currentFilter)
+                                            isCropped = true
                                             isProcessing = false
-                                            Toast.makeText(context, "Perspective Crop Applied!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Dokumen Berhasil Diluruskan & Dipertajam!", Toast.LENGTH_SHORT).show()
                                         }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                ) {
+                                    Icon(Icons.Default.Crop, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Pangkas & Luruskan Dokumen", fontWeight = FontWeight.Bold)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        isCropped = false
+                                        selectedBitmap = rawBitmap
                                     }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                            ) {
-                                Icon(Icons.Default.Crop, contentDescription = null)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Warp & Fit Document")
-                            }
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Atur Ulang")
+                                }
 
-                            Button(
-                                onClick = {
-                                    scope.launch {
-                                        isProcessing = true
-                                        try {
-                                            val file = repository.saveBitmapToFile(
-                                                bitmap = rawBitmap,
-                                                prefix = "Scan"
-                                            )
-                                            Toast.makeText(context, "Saved to ${file.name}", Toast.LENGTH_SHORT).show()
-                                            if (activity != null) {
-                                                AdManager.showInterstitialAd(activity) {
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            val saveBmp = selectedBitmap ?: rawBitmap
+                                            isProcessing = true
+                                            try {
+                                                val file = repository.saveBitmapToFile(
+                                                    bitmap = saveBmp,
+                                                    prefix = "Scan"
+                                                )
+                                                Toast.makeText(context, "Tersimpan: ${file.name}", Toast.LENGTH_SHORT).show()
+                                                if (activity != null) {
+                                                    AdManager.showInterstitialAd(activity) {
+                                                        onScanSuccess()
+                                                    }
+                                                } else {
                                                     onScanSuccess()
                                                 }
-                                            } else {
-                                                onScanSuccess()
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Error menyimpan: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            } finally {
+                                                isProcessing = false
                                             }
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "Save error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                        } finally {
-                                            isProcessing = false
                                         }
                                     }
+                                ) {
+                                    Icon(Icons.Default.Check, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Simpan Hasil Scan")
                                 }
-                            ) {
-                                Icon(Icons.Default.Check, contentDescription = null)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Save Scan")
                             }
                         }
                     }
                 }
             }
-
-            AdBannerView()
         }
     }
 }

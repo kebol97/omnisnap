@@ -5,8 +5,10 @@ import java.io.File
 enum class DocumentType {
     SCAN,
     TIMESTAMP_PHOTO,
+    TIMESTAMP_VIDEO,
     PDF,
     IMAGE,
+    VIDEO,
     OTHER
 }
 
@@ -33,4 +35,11 @@ data class DocumentItem(
 
     val isPdf: Boolean
         get() = name.endsWith(".pdf", ignoreCase = true) || type == DocumentType.PDF
+
+    val isVideo: Boolean
+        get() = name.endsWith(".mp4", ignoreCase = true) ||
+                name.endsWith(".mkv", ignoreCase = true) ||
+                name.endsWith(".3gp", ignoreCase = true) ||
+                type == DocumentType.TIMESTAMP_VIDEO ||
+                type == DocumentType.VIDEO
 }

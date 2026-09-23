@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -33,7 +34,16 @@ fun AdBannerView(
 ) {
     if (!AdManager.config.showBanner) return
 
+    val context = LocalContext.current
     var isAdLoaded by remember { mutableStateOf(false) }
+
+    val adSize = remember(context) {
+        val displayMetrics = context.resources.displayMetrics
+        val widthPixels = displayMetrics.widthPixels
+        val density = displayMetrics.density
+        val adWidth = (widthPixels / density).toInt()
+        AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, adWidth)
+    }
 
     if (isAdLoaded) {
         Surface(
@@ -48,7 +58,7 @@ fun AdBannerView(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(vertical = 4.dp)
             ) {
-                // AD Badge only visible when ad has successfully loaded
+                // AD Badge only visible when ad has successfully loaded (AdMob policy compliant)
                 Box(
                     modifier = Modifier
                         .background(
@@ -69,9 +79,9 @@ fun AdBannerView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
-                    factory = { context ->
-                        AdView(context).apply {
-                            setAdSize(AdSize.BANNER)
+                    factory = { ctx ->
+                        AdView(ctx).apply {
+                            setAdSize(adSize)
                             setAdUnitId(adUnitId)
                             adListener = object : AdListener() {
                                 override fun onAdLoaded() {
@@ -92,9 +102,9 @@ fun AdBannerView(
         // Invisible off-screen preloader to trigger onAdLoaded without rendering "ADVERTISEMENT" badge prematurely
         AndroidView(
             modifier = Modifier.padding(0.dp),
-            factory = { context ->
-                AdView(context).apply {
-                    setAdSize(AdSize.BANNER)
+            factory = { ctx ->
+                AdView(ctx).apply {
+                    setAdSize(adSize)
                     setAdUnitId(adUnitId)
                     adListener = object : AdListener() {
                         override fun onAdLoaded() {

@@ -90,14 +90,13 @@ fun PhotoConverterScreen(
             scope.launch {
                 isProcessing = true
                 try {
-                    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, it))
+                    val bitmap = ImageProcessingUtils.decodeBitmapFromUri(context, it)
+                    if (bitmap != null) {
+                        selectedBitmap = bitmap
+                        extractedText = ImageProcessingUtils.extractTextFromBitmap(bitmap)
                     } else {
-                        @Suppress("DEPRECATION")
-                        MediaStore.Images.Media.getBitmap(context.contentResolver, it)
+                        Toast.makeText(context, "Error loading image", Toast.LENGTH_SHORT).show()
                     }
-                    selectedBitmap = bitmap
-                    extractedText = ImageProcessingUtils.extractTextFromBitmap(bitmap)
                 } catch (e: Exception) {
                     Toast.makeText(context, "Error loading image", Toast.LENGTH_SHORT).show()
                 } finally {
@@ -123,6 +122,8 @@ fun PhotoConverterScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            AdBannerView()
+
             Button(
                 onClick = { photoPickerLauncher.launch("image/*") },
                 modifier = Modifier.fillMaxWidth()
@@ -267,8 +268,6 @@ fun PhotoConverterScreen(
                     }
                 }
             }
-
-            AdBannerView()
         }
     }
 }

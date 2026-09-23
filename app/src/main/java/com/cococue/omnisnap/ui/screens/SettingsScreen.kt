@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,26 +22,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.ViewStream
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -60,9 +49,6 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val activity = context as? Activity
 
-    var currentInterval by remember { mutableStateOf(AdManager.config.nativeAdInterval) }
-    var mapsApiKeyInput by remember { mutableStateOf(AdManager.config.googleMapsApiKey) }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -78,93 +64,10 @@ fun SettingsScreen() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Google Maps & Ad Preferences", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            // Banner Ad placed at top (AdMob policy compliant)
+            AdBannerView()
 
-            // Google Maps API Key Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Map,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text(text = "Integrasi Peta Google Maps", style = MaterialTheme.typography.titleLarge.copy(fontSize = 15.sp), fontWeight = FontWeight.SemiBold)
-                            Text(text = "Opsional: Masukkan Google Maps API Key untuk peta resmi", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = mapsApiKeyInput,
-                        onValueChange = { mapsApiKeyInput = it },
-                        label = { Text("Google Maps API Key (Opsional)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = {
-                            AdManager.updateGoogleMapsApiKey(mapsApiKeyInput)
-                            Toast.makeText(context, "Google Maps API Key Berhasil Disimpan!", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("Simpan Key")
-                    }
-                }
-            }
-
-            // Native Ad Interval Settings Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.ViewStream,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text(text = "Native Ad Content Interval", style = MaterialTheme.typography.titleLarge.copy(fontSize = 15.sp), fontWeight = FontWeight.SemiBold)
-                            Text(text = "Insert Native Ad after every N list items (Default: 3)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(listOf(1, 2, 3, 4, 5, 10)) { num ->
-                            FilterChip(
-                                selected = currentInterval == num,
-                                onClick = {
-                                    currentInterval = num
-                                    AdManager.updateNativeAdInterval(num)
-                                    Toast.makeText(context, "Native Ad interval set to every $num items", Toast.LENGTH_SHORT).show()
-                                },
-                                label = { Text("Every $num items") }
-                            )
-                        }
-                    }
-                }
-            }
+            Text("Ad & Privacy Preferences", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
             SettingsItem(
                 title = "European GDPR Privacy Options",
@@ -195,7 +98,7 @@ fun SettingsScreen() {
                 subtitle = "Read OmniSnap privacy policy & data compliance guidelines",
                 icon = Icons.Default.Security,
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://google.com"))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://berkahabadigame.blogspot.com/p/privacy-policy.html"))
                     context.startActivity(intent)
                 }
             )
@@ -241,8 +144,6 @@ fun SettingsScreen() {
                     }
                 }
             }
-
-            AdBannerView()
         }
     }
 }
