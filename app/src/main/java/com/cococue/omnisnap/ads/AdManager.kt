@@ -29,11 +29,11 @@ data class AdsRemoteConfig(
     val showNative: Boolean = true,
     val showRewarded: Boolean = true,
     val showAppOpen: Boolean = true,
-    val bannerAdUnitId: String = "ca-app-pub-3940256099942544/6300978111",
-    val interstitialAdUnitId: String = "ca-app-pub-3940256099942544/1033173712",
-    val rewardedAdUnitId: String = "ca-app-pub-3940256099942544/5224354917",
-    val nativeAdUnitId: String = "ca-app-pub-3940256099942544/2247696110",
-    val appOpenAdUnitId: String = "ca-app-pub-3940256099942544/9257395921",
+    val bannerAdUnitId: String = "ca-app-pub-3940256099942544/6300978111x",
+    val interstitialAdUnitId: String = "ca-app-pub-3940256099942544/1033173712x",
+    val rewardedAdUnitId: String = "ca-app-pub-3940256099942544/5224354917x",
+    val nativeAdUnitId: String = "ca-app-pub-3940256099942544/2247696110x",
+    val appOpenAdUnitId: String = "ca-app-pub-3940256099942544/9257395921x",
     val watermarkRemovalRewarded: Boolean = true,
     val nativeAdInterval: Int = 3,
     val googleMapsApiKey: String = ""
@@ -61,9 +61,14 @@ object AdManager {
     private var appOpenAd: AppOpenAd? = null
     private var appOpenAdLoadTime = 0L
 
-    private var isAdLoading = false
-    private var isAppOpenAdLoading = false
-    private var isInitialized = false
+    var isAdLoading = false
+        private set
+
+    var isAppOpenAdLoading = false
+        private set
+
+    var isInitialized = false
+        private set
 
     private var lastAdShowTime = 0L
     private const val AD_COOLDOWN_MS = 25000L
@@ -193,14 +198,14 @@ object AdManager {
     /**
      * Helper to check if loaded App Open Ad is valid and not expired (< 4 hours old)
      */
-    private fun isAppOpenAdAvailable(): Boolean {
+    fun isAppOpenAdAvailable(): Boolean {
         return appOpenAd != null && (System.currentTimeMillis() - appOpenAdLoadTime) < FOUR_HOURS_MS
     }
 
     /**
      * Helper to check if loaded Interstitial Ad is valid and not expired (< 4 hours old)
      */
-    private fun isInterstitialAdAvailable(): Boolean {
+    fun isInterstitialAdAvailable(): Boolean {
         return interstitialAd != null && (System.currentTimeMillis() - interstitialAdLoadTime) < FOUR_HOURS_MS
     }
 
@@ -263,7 +268,9 @@ object AdManager {
         val lastAppOpenTime = prefs.getLong("last_app_open_ad_time", 0L)
         val currentTime = System.currentTimeMillis()
 
-        val isEligible4Hours = (currentTime - lastAppOpenTime) >= FOUR_HOURS_MS
+        // If using AdMob Test Ad Unit ID, allow testing without 4-hour delay
+        val isTestAd = config.appOpenAdUnitId == APP_OPEN_AD_UNIT_ID
+        val isEligible4Hours = isTestAd || (currentTime - lastAppOpenTime) >= FOUR_HOURS_MS
 
         if (config.showAppOpen && isEligible4Hours && isAppOpenAdAvailable()) {
             appOpenAd?.fullScreenContentCallback = object : FullScreenContentCallback() {

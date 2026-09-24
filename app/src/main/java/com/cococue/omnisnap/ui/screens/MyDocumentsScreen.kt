@@ -71,7 +71,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cococue.omnisnap.ads.AdManager
 import com.cococue.omnisnap.data.model.DocumentItem
 import com.cococue.omnisnap.data.model.DocumentType
 import com.cococue.omnisnap.data.repository.DocumentRepository
@@ -112,8 +111,6 @@ fun MyDocumentsScreen() {
         val matchesQuery = searchQuery.isBlank() || doc.name.contains(searchQuery, ignoreCase = true)
         matchesType && matchesQuery
     }
-
-    val nativeInterval = AdManager.config.nativeAdInterval.coerceAtLeast(1)
 
     // Full Screen Overlay Preview Mode
     if (docToPreview != null) {
@@ -359,8 +356,8 @@ fun MyDocumentsScreen() {
                             onShareClick = { repository.shareDocument(doc) }
                         )
 
-                        // Insert Native Ad at configured interval between items
-                        if ((index + 1) % nativeInterval == 0) {
+                        // Insert Native Ad ONLY below the 3rd content item (index == 2), exactly 1 ad per page
+                        if (index == 2) {
                             Spacer(modifier = Modifier.height(4.dp))
                             AdNativeView()
                             Spacer(modifier = Modifier.height(4.dp))

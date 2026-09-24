@@ -61,7 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cococue.omnisnap.ads.AdManager
 import com.cococue.omnisnap.data.repository.DocumentRepository
-import com.cococue.omnisnap.ui.components.AdBannerView
+import com.cococue.omnisnap.ui.components.AdNativeView
 import com.cococue.omnisnap.ui.components.DocumentCropView
 import com.cococue.omnisnap.ui.components.PerspectiveTransformUtils
 import com.cococue.omnisnap.ui.components.QuadCorners
@@ -195,7 +195,7 @@ fun DocumentScannerScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            AdBannerView()
+            AdNativeView()
 
             // Document Scanner Mode Card
             Card(

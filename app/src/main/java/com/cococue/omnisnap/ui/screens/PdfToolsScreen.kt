@@ -68,7 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cococue.omnisnap.ads.AdManager
 import com.cococue.omnisnap.data.repository.DocumentRepository
-import com.cococue.omnisnap.ui.components.AdBannerView
+import com.cococue.omnisnap.ui.components.AdNativeView
 import com.cococue.omnisnap.util.ImageProcessingUtils
 import com.cococue.omnisnap.util.PdfUtils
 import kotlinx.coroutines.launch
@@ -278,7 +278,7 @@ fun PdfToolsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            AdBannerView()
+            AdNativeView()
 
             OutlinedTextField(
                 value = outputName,

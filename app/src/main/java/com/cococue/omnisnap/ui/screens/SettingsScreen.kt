@@ -41,7 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cococue.omnisnap.ads.AdManager
-import com.cococue.omnisnap.ui.components.AdBannerView
+import com.cococue.omnisnap.ui.components.AdNativeView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,8 +64,8 @@ fun SettingsScreen() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Banner Ad placed at top (AdMob policy compliant)
-            AdBannerView()
+            // Native Ad placed at top
+            AdNativeView()
 
             Text("Ad & Privacy Preferences", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 

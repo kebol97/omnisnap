@@ -63,7 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cococue.omnisnap.ads.AdManager
 import com.cococue.omnisnap.data.repository.DocumentRepository
-import com.cococue.omnisnap.ui.components.AdBannerView
+import com.cococue.omnisnap.ui.components.AdNativeView
 import com.cococue.omnisnap.util.ImageProcessingUtils
 import kotlinx.coroutines.launch
 
@@ -122,7 +122,7 @@ fun PhotoConverterScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            AdBannerView()
+            AdNativeView()
 
             Button(
                 onClick = { photoPickerLauncher.launch("image/*") },

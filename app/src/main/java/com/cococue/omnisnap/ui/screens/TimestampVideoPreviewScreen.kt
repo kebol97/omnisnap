@@ -52,7 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.cococue.omnisnap.data.repository.DocumentRepository
-import com.cococue.omnisnap.ui.components.AdBannerView
+import com.cococue.omnisnap.ui.components.AdNativeView
 import com.cococue.omnisnap.util.VideoProcessingUtils
 import kotlinx.coroutines.launch
 import java.io.File
@@ -104,7 +104,7 @@ fun TimestampVideoPreviewScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            AdBannerView()
+            AdNativeView()
 
             // Video Player Container with Live Timestamp Overlay
             Box(

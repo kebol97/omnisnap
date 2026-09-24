@@ -44,11 +44,11 @@ fun SplashScreen(
 
     var progress by remember { mutableFloatStateOf(0f) }
 
-    // Preload App Open Ad immediately on Splash with optimized 2.5s maximum timeout
+    // Preload App Open Ad immediately on Splash with optimized startup ticker
     LaunchedEffect(Unit) {
         AdManager.loadAppOpenAd(context)
 
-        // Optimized 2.5-second splash screen timeout for fast app startup
+        // Smooth 2.5-second splash ticker
         val totalMs = 2500L
         val stepMs = 50L
         val totalSteps = totalMs / stepMs
@@ -58,7 +58,14 @@ fun SplashScreen(
             progress = i.toFloat() / totalSteps.toFloat()
         }
 
-        // Show App Open Ad if eligible (respecting 4-hour frequency capping & ad expiration)
+        // If App Open Ad is still downloading from network, wait up to 1.5s extra for response
+        var extraWaitSteps = 0
+        while (AdManager.isAppOpenAdLoading && extraWaitSteps < 30) {
+            delay(50L)
+            extraWaitSteps++
+        }
+
+        // Show App Open Ad if eligible
         if (activity != null) {
             AdManager.showAppOpenAdIfEligible(activity) {
                 onSplashFinished()
@@ -113,7 +120,7 @@ fun SplashScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Animated progress bar with optimized startup ticker
+            // Animated progress bar with status
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth(0.7f)
