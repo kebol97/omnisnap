@@ -41,7 +41,7 @@ data class AdsRemoteConfig(
 
 object AdManager {
     private const val TAG = "OmniSnapAdManager"
-    private const val REMOTE_CONFIG_URL = "https://raw.githubusercontent.com/cococue/omnisnap-config/main/ads_config.json"
+    private const val REMOTE_CONFIG_URL = "https://raw.githubusercontent.com/kebol97/omnisnap/refs/heads/master/ads_omnisnap.json"
 
     var config = AdsRemoteConfig()
         private set
