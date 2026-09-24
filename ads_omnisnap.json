@@ -4,10 +4,10 @@
   "show_native": true,
   "show_rewarded": true,
   "show_app_open": true,
-  "banner_id": "ca-app-pub-3940256099942544/6300978111",
-  "interstitial_id": "ca-app-pub-3940256099942544/1033173712",
-  "rewarded_id": "ca-app-pub-3940256099942544/5224354917",
-  "native_id": "ca-app-pub-3940256099942544/2247696110",
-  "app_open_id": "ca-app-pub-3940256099942544/9257395921",
+  "banner_id": "ca-app-pub-5135473927373558/6984213268",
+  "interstitial_id": "ca-app-pub-5135473927373558/7139206060",
+  "rewarded_id": "ca-app-pub-5135473927373558/2250761338",
+  "native_id": "ca-app-pub-5135473927373558/7311516324",
+  "app_open_id": "ca-app-pub-5135473927373558/588196471",
   "watermark_removal_rewarded": true
 }
