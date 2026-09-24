@@ -3,6 +3,7 @@ package com.cococue.omnisnap.ads
 import android.app.Activity
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdLoader
 import com.google.android.gms.ads.AdRequest
@@ -24,19 +25,17 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 data class AdsRemoteConfig(
-    val showBanner: Boolean = true,
-    val showInterstitial: Boolean = true,
-    val showNative: Boolean = true,
-    val showRewarded: Boolean = true,
-    val showAppOpen: Boolean = true,
-    val bannerAdUnitId: String = "ca-app-pub-3940256099942544/6300978111x",
-    val interstitialAdUnitId: String = "ca-app-pub-3940256099942544/1033173712x",
-    val rewardedAdUnitId: String = "ca-app-pub-3940256099942544/5224354917x",
-    val nativeAdUnitId: String = "ca-app-pub-3940256099942544/2247696110x",
-    val appOpenAdUnitId: String = "ca-app-pub-3940256099942544/9257395921x",
-    val watermarkRemovalRewarded: Boolean = true,
-    val nativeAdInterval: Int = 3,
-    val googleMapsApiKey: String = ""
+    val showBanner: Boolean = false,
+    val showInterstitial: Boolean = false,
+    val showNative: Boolean = false,
+    val showRewarded: Boolean = false,
+    val showAppOpen: Boolean = false,
+    val bannerAdUnitId: String = "",
+    val interstitialAdUnitId: String = "",
+    val rewardedAdUnitId: String = "",
+    val nativeAdUnitId: String = "",
+    val appOpenAdUnitId: String = "",
+    val watermarkRemovalRewarded: Boolean = false
 )
 
 object AdManager {
@@ -45,13 +44,6 @@ object AdManager {
 
     var config = AdsRemoteConfig()
         private set
-
-    // Test Ad Unit IDs recommended by AdMob
-    const val BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
-    const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
-    const val REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
-    const val NATIVE_AD_UNIT_ID = "ca-app-pub-3940256099942544/2247696110"
-    const val APP_OPEN_AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395921"
 
     private var interstitialAd: InterstitialAd? = null
     private var interstitialAdLoadTime = 0L
@@ -83,78 +75,52 @@ object AdManager {
             isInitialized = true
             Log.d(TAG, "AdMob MobileAds initialized successfully: ${status.adapterStatusMap}")
         }
-        val prefs = context.getSharedPreferences("omnisnap_prefs", Context.MODE_PRIVATE)
-        val savedKey = prefs.getString("custom_google_maps_api_key", "") ?: ""
-        if (savedKey.isNotBlank()) {
-            config = config.copy(googleMapsApiKey = savedKey)
-        }
     }
 
     /**
-     * Dynamically update Native Ad interval at runtime
+     * Fetch Remote Config JSON directly from GitHub.
      */
-    fun updateNativeAdInterval(newInterval: Int) {
-        val sanitized = newInterval.coerceAtLeast(1)
-        config = config.copy(nativeAdInterval = sanitized)
-        Log.d(TAG, "Native Ad interval updated to: $sanitized")
-    }
-
-    /**
-     * Dynamically update Google Maps API key at runtime & persist to SharedPreferences
-     */
-    fun updateGoogleMapsApiKey(context: Context, newKey: String) {
-        val trimmed = newKey.trim()
-        val prefs = context.getSharedPreferences("omnisnap_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("custom_google_maps_api_key", trimmed).apply()
-        config = config.copy(googleMapsApiKey = trimmed)
-        Log.d(TAG, "Google Maps API Key updated and saved")
-    }
-
-    /**
-     * Fetch Remote Config JSON from GitHub URL with strict timeout & safe fallback
-     */
+    @Suppress("UNUSED_PARAMETER")
     suspend fun fetchRemoteConfig(context: Context? = null): AdsRemoteConfig = withContext(Dispatchers.IO) {
         try {
             val url = URL(REMOTE_CONFIG_URL)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 3000 // 3 seconds connect timeout
-            connection.readTimeout = 3000    // 3 seconds read timeout
-            connection.requestMethod = "GET"
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 3000 // 3 seconds connect timeout
+                readTimeout = 3000    // 3 seconds read timeout
+                requestMethod = "GET"
+            }
 
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {
                 val jsonText = connection.inputStream.bufferedReader().use { it.readText() }
                 val json = JSONObject(jsonText)
 
-                val prefsKey = context?.getSharedPreferences("omnisnap_prefs", Context.MODE_PRIVATE)
-                    ?.getString("custom_google_maps_api_key", "") ?: ""
-
-                val remoteKey = json.optString("google_maps_api_key", "")
-                val effectiveKey = if (prefsKey.isNotBlank()) prefsKey else (if (config.googleMapsApiKey.isNotBlank()) config.googleMapsApiKey else remoteKey)
-
-                val parsedConfig = AdsRemoteConfig(
-                    showBanner = json.optBoolean("show_banner", true),
-                    showInterstitial = json.optBoolean("show_interstitial", true),
-                    showNative = json.optBoolean("show_native", true),
-                    showRewarded = json.optBoolean("show_rewarded", true),
-                    showAppOpen = json.optBoolean("show_app_open", true),
-                    bannerAdUnitId = json.optString("banner_id", BANNER_AD_UNIT_ID),
-                    interstitialAdUnitId = json.optString("interstitial_id", INTERSTITIAL_AD_UNIT_ID),
-                    rewardedAdUnitId = json.optString("rewarded_id", REWARDED_AD_UNIT_ID),
-                    nativeAdUnitId = json.optString("native_id", NATIVE_AD_UNIT_ID),
-                    appOpenAdUnitId = json.optString("app_open_id", APP_OPEN_AD_UNIT_ID),
-                    watermarkRemovalRewarded = json.optBoolean("watermark_removal_rewarded", true),
-                    nativeAdInterval = json.optInt("native_ad_interval", 3),
-                    googleMapsApiKey = effectiveKey
+                config = AdsRemoteConfig(
+                    showBanner = json.optBoolean("show_banner", false),
+                    showInterstitial = json.optBoolean("show_interstitial", false),
+                    showNative = json.optBoolean("show_native", false),
+                    showRewarded = json.optBoolean("show_rewarded", false),
+                    showAppOpen = json.optBoolean("show_app_open", false),
+                    bannerAdUnitId = json.optString("banner_id", "").cleanId(),
+                    interstitialAdUnitId = json.optString("interstitial_id", "").cleanId(),
+                    rewardedAdUnitId = json.optString("rewarded_id", "").cleanId(),
+                    nativeAdUnitId = json.optString("native_id", "").cleanId(),
+                    appOpenAdUnitId = json.optString("app_open_id", "").cleanId(),
+                    watermarkRemovalRewarded = json.optBoolean("watermark_removal_rewarded", false)
                 )
-                config = parsedConfig
-                Log.d(TAG, "Remote config fetched successfully: $parsedConfig")
+                Log.d(TAG, "Remote config fetched successfully from GitHub: $config")
             } else {
-                Log.w(TAG, "Remote config fetch HTTP response code: ${connection.responseCode}, using defaults")
+                Log.w(TAG, "Remote config fetch failed (HTTP ${connection.responseCode}). Disabling ads.")
+                config = AdsRemoteConfig()
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Remote config fetch failed or timed out (${e.message}), using default config")
+            Log.w(TAG, "Remote config fetch failed or timed out (${e.message}). Disabling ads.")
+            config = AdsRemoteConfig()
         }
         return@withContext config
+    }
+
+    private fun String.cleanId(): String {
+        return this.trim().removePrefix("\"").removeSuffix("\"")
     }
 
     /**
@@ -222,7 +188,7 @@ object AdManager {
      * Load App Open Ad with expiration tracking
      */
     fun loadAppOpenAd(context: Context, onLoaded: (() -> Unit)? = null) {
-        if (!config.showAppOpen) {
+        if (!config.showAppOpen || config.appOpenAdUnitId.isBlank()) {
             onLoaded?.invoke()
             return
         }
@@ -264,19 +230,24 @@ object AdManager {
      * Show App Open Ad with strict 4-hour frequency capping policy and expiration check
      */
     fun showAppOpenAdIfEligible(activity: Activity, onFinished: () -> Unit) {
+        if (!config.showAppOpen || config.appOpenAdUnitId.isBlank()) {
+            onFinished()
+            return
+        }
+
         val prefs = activity.getSharedPreferences("omnisnap_prefs", Context.MODE_PRIVATE)
         val lastAppOpenTime = prefs.getLong("last_app_open_ad_time", 0L)
         val currentTime = System.currentTimeMillis()
 
         // If using AdMob Test Ad Unit ID, allow testing without 4-hour delay
-        val isTestAd = config.appOpenAdUnitId == APP_OPEN_AD_UNIT_ID
+        val isTestAd = config.appOpenAdUnitId.contains("3940256099942544")
         val isEligible4Hours = isTestAd || (currentTime - lastAppOpenTime) >= FOUR_HOURS_MS
 
-        if (config.showAppOpen && isEligible4Hours && isAppOpenAdAvailable()) {
+        if (isEligible4Hours && isAppOpenAdAvailable()) {
             appOpenAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     appOpenAd = null
-                    prefs.edit().putLong("last_app_open_ad_time", System.currentTimeMillis()).apply()
+                    prefs.edit { putLong("last_app_open_ad_time", System.currentTimeMillis()) }
                     loadAppOpenAd(activity)
                     onFinished()
                 }
@@ -304,7 +275,7 @@ object AdManager {
      * Preload Interstitial Ad with expiration tracking
      */
     fun loadInterstitialAd(context: Context) {
-        if (!config.showInterstitial) return
+        if (!config.showInterstitial || config.interstitialAdUnitId.isBlank()) return
         if (isInterstitialAdAvailable()) {
             Log.d(TAG, "Interstitial Ad already available & cached")
             return
@@ -338,6 +309,11 @@ object AdManager {
      * Show Interstitial Ad safely with cooldown and expiration check
      */
     fun showInterstitialAd(activity: Activity, onDismiss: () -> Unit) {
+        if (!config.showInterstitial || config.interstitialAdUnitId.isBlank()) {
+            onDismiss()
+            return
+        }
+
         val currentTime = System.currentTimeMillis()
         if (!isInterstitialAdAvailable() && interstitialAd != null) {
             Log.d(TAG, "Interstitial Ad expired. Clearing and reloading.")
@@ -345,7 +321,7 @@ object AdManager {
             loadInterstitialAd(activity)
         }
 
-        if (config.showInterstitial && isInterstitialAdAvailable() && (currentTime - lastAdShowTime > AD_COOLDOWN_MS)) {
+        if (isInterstitialAdAvailable() && (currentTime - lastAdShowTime > AD_COOLDOWN_MS)) {
             interstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     interstitialAd = null
@@ -369,7 +345,7 @@ object AdManager {
      * Load Rewarded Ad for Watermark Removal
      */
     fun loadRewardedAd(context: Context, onLoaded: (() -> Unit)? = null) {
-        if (!config.showRewarded) return
+        if (!config.showRewarded || config.rewardedAdUnitId.isBlank()) return
         val adRequest = AdRequest.Builder().build()
         RewardedAd.load(
             context,
@@ -392,6 +368,11 @@ object AdManager {
      * Show Rewarded Ad and trigger callback when user earns reward
      */
     fun showRewardedAd(activity: Activity, onRewardEarned: () -> Unit, onFailed: () -> Unit) {
+        if (!config.showRewarded || config.rewardedAdUnitId.isBlank()) {
+            onFailed()
+            return
+        }
+
         if (rewardedAd != null) {
             rewardedAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
@@ -418,7 +399,7 @@ object AdManager {
      * Load Native Ad
      */
     fun loadNativeAd(context: Context, onNativeAdLoaded: (NativeAd) -> Unit) {
-        if (!config.showNative) return
+        if (!config.showNative || config.nativeAdUnitId.isBlank()) return
         val adLoader = AdLoader.Builder(context, config.nativeAdUnitId)
             .forNativeAd { nativeAd ->
                 onNativeAdLoaded(nativeAd)

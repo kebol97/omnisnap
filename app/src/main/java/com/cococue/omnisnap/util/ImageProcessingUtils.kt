@@ -17,7 +17,6 @@ import android.location.Geocoder
 import android.net.Uri
 import android.os.Build
 import android.util.Log
-import com.cococue.omnisnap.ads.AdManager
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
