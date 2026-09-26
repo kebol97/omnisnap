@@ -1,0 +1,61 @@
+Versi Bahasa Indonesia (Compliant)
+Judul Aplikasi (Maks. 30 karakter):
+
+OmniSnap: Scanner & PDF Tools
+
+Deskripsi Singkat (71 / 80 karakter):
+
+Pindai dokumen, sematkan timestamp GPS, kelola PDF, dan konversi gambar.
+
+Deskripsi Lengkap:
+
+OmniSnap adalah aplikasi produktivitas untuk membantu digitalisasi dokumen, pemindaian presisi, dan pengelolaan file PDF langsung dari perangkat Android Anda.
+
+Fitur Utama:
+
+Pemindai Dokumen: Pindai dokumen fisik, formulir, atau tanda terima dengan deteksi tepi otomatis dan pemotongan presisi untuk menghasilkan salinan digital yang jelas.
+
+Kamera Timestamp GPS: Dokumentasikan foto dengan informasi tanggal, waktu, koordinat lintang/bujur GPS, serta peta lokasi secara akurat.
+
+Manajemen File PDF:
+
+Tanda tangan digital pada dokumen PDF
+
+Penggabungan beberapa file PDF menjadi satu file
+
+Kompresi ukuran dokumen PDF untuk efisiensi penyimpanan
+
+Konversi Gambar & OCR: Ubah format foto ke PDF dan ekstrak teks langsung dari gambar untuk kemudahan pengeditan.
+
+Pengelola File: Akses, simpan, dan kelola dokumen yang baru dipindai dengan rapi di memori lokal perangkat.
+
+Versi Bahasa Inggris (Compliant)
+App Title (Max 30 chars):
+
+OmniSnap: Scanner & PDF Tools
+
+Short Description (73 / 80 chars):
+
+Scan documents, add GPS timestamps, manage PDFs, and convert images easily.
+
+Full Description:
+
+OmniSnap is a versatile productivity tool designed to help you scan, digitize, and manage PDF documents directly from your Android device.
+
+Key Features:
+
+Document Scanner: Digitize paper files, receipts, and notes using edge detection and precision cropping tools for clear document outputs.
+
+GPS Timestamp Camera: Capture photo records with embedded date, time, GPS coordinates, and location maps for field reports and documentation.
+
+PDF Tools:
+
+Add digital signatures to PDF forms
+
+Merge multiple PDF files into a single document
+
+Compress PDF file sizes for easy sharing and storage
+
+Image Converter & OCR: Convert image files into PDF format and recognize text from images using optical character recognition.
+
+File Organizer: Store, browse, and categorize your recent scans directly within the app.
